@@ -87,16 +87,17 @@ export function analyzeTestResults(testData: {
           pageTitle: page.title,
           recommendation: "Check server configuration and ensure the page is accessible.",
         })
-      } else if (error.includes("404")) {
+      } else if (error.includes("soft 404")) {
         issues.push({
           id: `issue_${issueCounter++}`,
-          title: "404 Content Detected",
-          description: "Page contains '404' or 'Not Found' text, suggesting broken content.",
+          title: "Soft 404 Detected",
+          description: "Page returns HTTP 200 but displays 404 error content, which can confuse search engines.",
           severity: "high",
-          category: "functionality",
+          category: "seo",
           pageUrl: page.url,
           pageTitle: page.title,
-          recommendation: "Review page content and fix broken links or missing resources.",
+          recommendation:
+            "Return proper HTTP 404 status code for missing pages instead of showing error content with 200 status.",
         })
       }
     }

@@ -128,8 +128,22 @@ export async function crawlWebsite(url: string, testId: string) {
         if (response.status >= 400) {
           errors.push(`HTTP ${response.status} error`)
         }
-        if (html.includes("404") || html.includes("Not Found")) {
-          errors.push("Page may contain 404 content")
+        // Check title and main content, not just any occurrence of "404"
+        if (response.status === 200) {
+          const titleLower = title.toLowerCase()
+          const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i)
+          const bodyText = bodyMatch ? bodyMatch[1].substring(0, 5000) : "" // First 5000 chars of body
+
+          // Only flag as soft 404 if title or prominent body text suggests it's an error page
+          if (
+            (titleLower.includes("404") && titleLower.includes("not found")) ||
+            titleLower === "404" ||
+            titleLower === "not found" ||
+            bodyText.includes("<h1>404</h1>") ||
+            bodyText.includes("<h1>Not Found</h1>")
+          ) {
+            errors.push("Page may be a soft 404 (returns 200 but shows error content)")
+          }
         }
 
         const visualIssues = analyzeVisualIssues(html)
