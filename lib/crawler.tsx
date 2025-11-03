@@ -588,6 +588,58 @@ function analyzeVisualIssues(html: string): string[] {
     issues.push(`${scriptsWithoutAsync.length} scripts without async/defer (performance issue)`)
   }
 
+  // Security checks
+  // Check for mixed content (HTTP resources on HTTPS page)
+  const httpResources = html.match(/src=["']http:\/\//gi) || html.match(/href=["']http:\/\//gi)
+  if (httpResources && httpResources.length > 0) {
+    issues.push(`${httpResources.length} HTTP resources on HTTPS page (security - mixed content warning)`)
+  }
+
+  // Check for inline event handlers (XSS risk)
+  const inlineEvents = html.match(/on(click|load|error|mouseover)=["'][^"']*["']/gi)
+  if (inlineEvents && inlineEvents.length > 5) {
+    issues.push(`${inlineEvents.length} inline event handlers detected (security - potential XSS risk)`)
+  }
+
+  // Check for password fields without autocomplete
+  const passwordFieldsWithoutAutocomplete = html.match(/<input[^>]*type=["']password["'](?![^>]*autocomplete=)[^>]*>/gi)
+  if (passwordFieldsWithoutAutocomplete && passwordFieldsWithoutAutocomplete.length > 0) {
+    issues.push(
+      `${passwordFieldsWithoutAutocomplete.length} password fields without autocomplete attribute (security/UX issue)`,
+    )
+  }
+
+  // Check for forms without HTTPS action
+  const formsWithHttpAction = html.match(/<form[^>]*action=["']http:\/\/[^"']*["'][^>]*>/gi)
+  if (formsWithHttpAction && formsWithHttpAction.length > 0) {
+    issues.push(`${formsWithHttpAction.length} forms submitting to HTTP (security issue - use HTTPS)`)
+  }
+
+  // Performance checks
+  // Check for render-blocking resources
+  const renderBlockingCSS = html.match(/<link[^>]*rel=["']stylesheet["'](?![^>]*media=["']print["'])[^>]*>/gi)
+  if (renderBlockingCSS && renderBlockingCSS.length > 5) {
+    issues.push(`${renderBlockingCSS.length} render-blocking stylesheets (performance issue)`)
+  }
+
+  // Check for unoptimized images (no width/height)
+  const imagesWithoutDimensions = html.match(/<img(?![^>]*width=)(?![^>]*height=)[^>]*>/gi)
+  if (imagesWithoutDimensions && imagesWithoutDimensions.length > 3) {
+    issues.push(`${imagesWithoutDimensions.length} images without dimensions (performance - layout shift issue)`)
+  }
+
+  // Check for large number of DOM elements
+  const allTags = html.match(/<[^>]+>/g) || []
+  if (allTags.length > 1500) {
+    issues.push(`Large DOM size detected (${allTags.length} elements - performance issue)`)
+  }
+
+  // Check for synchronous scripts in head
+  const syncScriptsInHead = html.match(/<head[\s\S]*?<script(?![^>]*async)(?![^>]*defer)[^>]*src=/gi)
+  if (syncScriptsInHead && syncScriptsInHead.length > 0) {
+    issues.push(`${syncScriptsInHead.length} synchronous scripts in <head> (performance - blocking issue)`)
+  }
+
   return issues
 }
 

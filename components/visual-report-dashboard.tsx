@@ -20,6 +20,9 @@ import {
   Search,
   Zap,
   Palette,
+  Shield,
+  FileText,
+  Target,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -142,6 +145,9 @@ export function VisualReportDashboard({
   const mediumCount = report.issues.filter((i) => i.severity === "medium").length
   const lowCount = report.issues.filter((i) => i.severity === "low").length
 
+  const scenariosCount = report.actions.length
+  const uniqueActionTypes = new Set(report.actions.map((a) => a.type)).size
+
   const getCategoryIcon = (category: string) => {
     switch (category.toLowerCase()) {
       case "accessibility":
@@ -150,6 +156,8 @@ export function VisualReportDashboard({
         return <Search className="size-5" />
       case "performance":
         return <Zap className="size-5" />
+      case "security":
+        return <Shield className="size-5" />
       case "ux":
       case "ui/ux":
         return <Palette className="size-5" />
@@ -161,7 +169,6 @@ export function VisualReportDashboard({
   const getSolution = (issue: Issue): string => {
     const desc = issue.description.toLowerCase()
 
-    // Accessibility solutions
     if (desc.includes("alt text") || desc.includes("alt attribute")) {
       return 'Add descriptive alt text to all images using the alt attribute. For decorative images, use alt="" to indicate they should be ignored by screen readers.'
     }
@@ -178,7 +185,6 @@ export function VisualReportDashboard({
       return "Add aria-label or descriptive text content to buttons so screen reader users understand their purpose."
     }
 
-    // SEO solutions
     if (desc.includes("meta description")) {
       return "Add a meta description tag in the <head> section with a compelling 150-160 character summary of the page content."
     }
@@ -195,7 +201,6 @@ export function VisualReportDashboard({
       return "Implement JSON-LD structured data (Schema.org) to help search engines understand your content better."
     }
 
-    // UX solutions
     if (desc.includes("empty link") || (desc.includes("link") && desc.includes("text"))) {
       return "Ensure all links have descriptive text content. Avoid generic text like 'click here' - use meaningful descriptions instead."
     }
@@ -206,7 +211,6 @@ export function VisualReportDashboard({
       return "Improve color contrast between text and background to meet WCAG AA standards (4.5:1 for normal text, 3:1 for large text)."
     }
 
-    // Performance solutions
     if (desc.includes("external script") || desc.includes("javascript")) {
       return "Add async or defer attributes to external script tags to prevent blocking page rendering. Consider bundling scripts to reduce requests."
     }
@@ -214,7 +218,6 @@ export function VisualReportDashboard({
       return "Move inline styles to external CSS files or use CSS-in-JS solutions to improve maintainability and caching."
     }
 
-    // Functionality solutions
     if (desc.includes("form") && desc.includes("action")) {
       return "Add an action attribute to forms specifying where form data should be submitted, or implement JavaScript form handling."
     }
@@ -225,8 +228,52 @@ export function VisualReportDashboard({
       return 'Add explicit type attributes to buttons (type="button", type="submit", or type="reset") to prevent unexpected form submissions.'
     }
 
-    // Default solution
+    if (desc.includes("mixed content") || (desc.includes("http") && desc.includes("https"))) {
+      return "Ensure all resources (scripts, stylesheets, images) are loaded over HTTPS to prevent mixed content warnings and security vulnerabilities."
+    }
+    if (desc.includes("x-frame-options") || desc.includes("clickjacking")) {
+      return "Add X-Frame-Options header (DENY or SAMEORIGIN) to prevent clickjacking attacks where your site is embedded in malicious iframes."
+    }
+    if (desc.includes("content-security-policy") || desc.includes("csp")) {
+      return "Implement Content-Security-Policy headers to prevent XSS attacks by controlling which resources can be loaded and executed."
+    }
+    if (desc.includes("autocomplete") && desc.includes("password")) {
+      return 'Ensure password fields have autocomplete="new-password" or autocomplete="current-password" for better security and user experience.'
+    }
+
+    if (desc.includes("render-blocking") || desc.includes("blocking resource")) {
+      return "Move critical CSS inline and defer non-critical CSS. Add async or defer attributes to JavaScript files to prevent render blocking."
+    }
+    if (desc.includes("image optimization") || desc.includes("large image")) {
+      return "Optimize images by compressing them, using modern formats (WebP, AVIF), and implementing responsive images with srcset."
+    }
+    if (desc.includes("caching") || desc.includes("cache-control")) {
+      return "Implement proper cache-control headers for static assets to improve load times for returning visitors."
+    }
+
     return "Review the issue description and implement the recommended fix. Consult WCAG guidelines, MDN documentation, or web.dev for detailed implementation guidance."
+  }
+
+  const generateExecutiveSummary = () => {
+    const totalIssues = report.issues.length
+    const criticalAndHigh = criticalCount + highCount
+    const categories = Object.keys(issuesByCategory)
+
+    if (totalIssues === 0) {
+      return "Excellent! Your website passed all automated tests without any issues detected. The site demonstrates good practices in accessibility, SEO, performance, and security."
+    }
+
+    const priorityText =
+      criticalAndHigh > 0
+        ? `${criticalAndHigh} critical or high-priority ${criticalAndHigh === 1 ? "issue" : "issues"} requiring immediate attention`
+        : "no critical issues"
+
+    const categoryText =
+      categories.length > 0
+        ? `Issues were found in ${categories.length} ${categories.length === 1 ? "category" : "categories"}: ${categories.join(", ")}`
+        : ""
+
+    return `Your website was tested with ${scenariosCount} automated scenarios across ${uniqueActionTypes} different test types. We identified ${totalIssues} ${totalIssues === 1 ? "issue" : "issues"} with ${priorityText}. ${categoryText}. Addressing these issues will improve user experience, search engine visibility, and overall site quality.`
   }
 
   return (
@@ -247,7 +294,31 @@ export function VisualReportDashboard({
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card className="p-6 mb-6 bg-primary/5 border-primary/20">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <FileText className="size-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold mb-2">Executive Summary</h2>
+                <p className="text-sm leading-relaxed text-muted-foreground">{generateExecutiveSummary()}</p>
+              </div>
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <Card className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Target className="size-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{scenariosCount}</p>
+                  <p className="text-sm text-muted-foreground">Scenarios Tested</p>
+                </div>
+              </div>
+            </Card>
+
             <Card className="p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-destructive/10">
