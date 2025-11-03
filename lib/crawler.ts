@@ -63,14 +63,42 @@ export async function crawlWebsite(url: string, testId: string) {
       testStore.set(testId, testData)
 
       try {
-        // Fetch the page
+        console.log(`[v0] Crawling: ${currentUrl}`)
+
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+
         const response = await fetch(currentUrl, {
           headers: {
-            "User-Agent": "SiteAuditor/1.0 (Website Testing Bot)",
+            "User-Agent": "Mozilla/5.0 (compatible; SiteAuditor/1.0; +https://siteauditor.com/bot)",
+            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
           },
+          signal: controller.signal,
         })
 
+        clearTimeout(timeoutId)
+
+        console.log(`[v0] Response status for ${currentUrl}: ${response.status}`)
+
+        const contentType = response.headers.get("content-type") || ""
+        if (!contentType.includes("text/html")) {
+          console.log(`[v0] Skipping non-HTML content: ${contentType}`)
+          pages.push({
+            url: currentUrl,
+            title: "Non-HTML Content",
+            statusCode: response.status,
+            links: [],
+            errors: [`Content type is ${contentType}, expected HTML`],
+            timestamp: Date.now(),
+            visualIssues: [],
+            consoleErrors: [],
+          })
+          continue
+        }
+
         const html = await response.text()
+        console.log(`[v0] Fetched ${html.length} bytes from ${currentUrl}`)
 
         // Extract title
         const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
@@ -119,12 +147,24 @@ export async function crawlWebsite(url: string, testId: string) {
         })
       } catch (error) {
         console.error(`[v0] Error crawling ${currentUrl}:`, error)
+
+        let errorMessage = "Failed to fetch page"
+        if (error instanceof Error) {
+          if (error.name === "AbortError") {
+            errorMessage = "Request timed out (10s limit)"
+          } else if (error.message.includes("fetch")) {
+            errorMessage = "Network error or CORS blocked"
+          } else {
+            errorMessage = error.message
+          }
+        }
+
         pages.push({
           url: currentUrl,
           title: "Error",
           statusCode: 0,
           links: [],
-          errors: ["Failed to fetch page"],
+          errors: [errorMessage],
           timestamp: Date.now(),
           visualIssues: [],
           consoleErrors: [],
@@ -133,6 +173,13 @@ export async function crawlWebsite(url: string, testId: string) {
 
       // Small delay to avoid overwhelming the server
       await new Promise((resolve) => setTimeout(resolve, 500))
+    }
+
+    const successfulPages = pages.filter((p) => p.statusCode >= 200 && p.statusCode < 400)
+    if (successfulPages.length === 0) {
+      throw new Error(
+        "Could not access any pages on this website. The site may have bot protection or CORS restrictions.",
+      )
     }
 
     // Update to analyzing phase
@@ -159,7 +206,8 @@ export async function crawlWebsite(url: string, testId: string) {
     console.error("[v0] Crawl failed:", error)
     const testData = testStore.get(testId)!
     testData.status = "error"
-    testData.message = "An error occurred during testing"
+    testData.message = error instanceof Error ? error.message : "An error occurred during testing"
+    testData.pages = pages // Include any pages we did manage to crawl
     testStore.set(testId, testData)
   }
 }
@@ -262,9 +310,19 @@ export async function getTestResults(testId: string) {
 }
 
 export async function getAnalyzedReport(testId: string) {
+  console.log("[v0] getAnalyzedReport called for testId:", testId)
+  console.log("[v0] testStore size:", testStore.size)
+  console.log("[v0] testStore keys:", Array.from(testStore.keys()))
+
   const testData = testStore.get(testId)
 
+  console.log("[v0] testData found:", !!testData)
+  if (testData) {
+    console.log("[v0] testData status:", testData.status)
+  }
+
   if (!testData || testData.status !== "complete") {
+    console.log("[v0] Returning null - testData missing or not complete")
     return null
   }
 

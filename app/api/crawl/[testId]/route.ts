@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getTestStatus } from "@/lib/crawler"
+import { getTestStatus, getTestResults } from "@/lib/crawler"
+import { analyzeTestResults } from "@/lib/analyzer"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ testId: string }> }) {
   try {
@@ -9,6 +10,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     if (!status) {
       return NextResponse.json({ error: "Test not found" }, { status: 404 })
+    }
+
+    if (status.status === "complete") {
+      const testResults = await getTestResults(testId)
+      if (testResults) {
+        const analyzedReport = analyzeTestResults(testResults)
+        return NextResponse.json({
+          ...status,
+          report: analyzedReport,
+        })
+      }
     }
 
     return NextResponse.json(status)

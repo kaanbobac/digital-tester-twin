@@ -15,6 +15,7 @@ interface CrawlStatus {
   currentPage?: string
   message?: string
   testId?: string
+  report?: any // Added report field to store the complete report
 }
 
 export default function TestPage() {
@@ -31,6 +32,8 @@ export default function TestPage() {
 
     const startCrawl = async () => {
       try {
+        console.log("[v0] Starting crawl for:", url)
+
         const response = await fetch("/api/crawl", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -38,36 +41,50 @@ export default function TestPage() {
         })
 
         if (!response.ok) {
-          throw new Error("Failed to start crawl")
+          const errorData = await response.json()
+          console.error("[v0] Crawl start failed:", errorData)
+          throw new Error(errorData.error || "Failed to start crawl")
         }
 
         const { testId } = await response.json()
+        console.log("[v0] Test started with ID:", testId)
 
         // Poll for status updates
         const pollInterval = setInterval(async () => {
-          const statusResponse = await fetch(`/api/crawl/${testId}`)
-          const status = await statusResponse.json()
+          try {
+            const statusResponse = await fetch(`/api/crawl/${testId}`)
+            const status = await statusResponse.json()
 
-          setCrawlStatus(status)
+            console.log("[v0] Status update:", status)
+            setCrawlStatus(status)
 
-          if (status.status === "complete" || status.status === "error") {
-            clearInterval(pollInterval)
-            if (status.status === "complete") {
-              // Redirect to report after a brief delay
-              setTimeout(() => {
-                window.location.href = `/report/${testId}`
-              }, 1500)
+            if (status.status === "complete" || status.status === "error") {
+              clearInterval(pollInterval)
+              if (status.status === "complete") {
+                if (status.report) {
+                  console.log("[v0] Storing report in sessionStorage")
+                  sessionStorage.setItem(`report_${testId}`, JSON.stringify(status.report))
+                }
+
+                // Redirect to report after a brief delay
+                setTimeout(() => {
+                  window.location.href = `/report/${testId}`
+                }, 1500)
+              }
             }
+          } catch (pollError) {
+            console.error("[v0] Poll error:", pollError)
           }
         }, 1000)
 
         return () => clearInterval(pollInterval)
       } catch (error) {
+        console.error("[v0] Start crawl error:", error)
         setCrawlStatus({
           status: "error",
           progress: 0,
           pagesFound: 0,
-          message: "Failed to start website test. Please try again.",
+          message: error instanceof Error ? error.message : "Failed to start website test. Please try again.",
         })
       }
     }
@@ -122,6 +139,12 @@ export default function TestPage() {
                 (crawlStatus.status === "analyzing" && "Running automated tests and capturing screenshots") ||
                 (crawlStatus.status === "complete" && "Generating your comprehensive report")}
             </p>
+            {crawlStatus.status === "error" && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Note: Large commercial sites like Amazon often block automated testing tools. Try testing smaller
+                websites or your own projects.
+              </p>
+            )}
           </div>
 
           {/* Progress Bar */}
