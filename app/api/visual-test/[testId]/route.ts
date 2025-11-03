@@ -15,19 +15,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     console.log("[v0] Test status:", status.status, "Progress:", status.progress)
 
-    if (status.status === "complete") {
-      const fullData = await getTestResults(testId)
-      return NextResponse.json({
-        ...status,
-        actions: fullData?.actions || [],
-        pagesFound: fullData?.pagesFound || 0,
-      })
-    }
-
     const fullData = await getTestResults(testId)
+
     return NextResponse.json({
       ...status,
       actions: fullData?.actions || [],
+      pages: fullData?.pages || [],
+      pagesFound: fullData?.pagesFound || 0,
+      startTime: fullData?.startTime,
+      endTime: fullData?.endTime,
     })
   } catch (error) {
     console.error("[v0] Error getting test status:", error)

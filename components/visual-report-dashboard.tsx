@@ -16,9 +16,12 @@ import {
   Type,
   Eye,
   ArrowDown,
+  Lightbulb,
+  Search,
+  Zap,
+  Palette,
 } from "lucide-react"
 import Link from "next/link"
-import Image from "next/image"
 
 interface TestAction {
   id: string
@@ -123,6 +126,109 @@ export function VisualReportDashboard({
     }
   }
 
+  const issuesByCategory = report.issues.reduce(
+    (acc, issue) => {
+      if (!acc[issue.category]) {
+        acc[issue.category] = []
+      }
+      acc[issue.category].push(issue)
+      return acc
+    },
+    {} as Record<string, Issue[]>,
+  )
+
+  const criticalCount = report.issues.filter((i) => i.severity === "critical").length
+  const highCount = report.issues.filter((i) => i.severity === "high").length
+  const mediumCount = report.issues.filter((i) => i.severity === "medium").length
+  const lowCount = report.issues.filter((i) => i.severity === "low").length
+
+  const getCategoryIcon = (category: string) => {
+    switch (category.toLowerCase()) {
+      case "accessibility":
+        return <Eye className="size-5" />
+      case "seo":
+        return <Search className="size-5" />
+      case "performance":
+        return <Zap className="size-5" />
+      case "ux":
+      case "ui/ux":
+        return <Palette className="size-5" />
+      default:
+        return <AlertTriangle className="size-5" />
+    }
+  }
+
+  const getSolution = (issue: Issue): string => {
+    const desc = issue.description.toLowerCase()
+
+    // Accessibility solutions
+    if (desc.includes("alt text") || desc.includes("alt attribute")) {
+      return 'Add descriptive alt text to all images using the alt attribute. For decorative images, use alt="" to indicate they should be ignored by screen readers.'
+    }
+    if (desc.includes("form label") || (desc.includes("input") && desc.includes("label"))) {
+      return "Wrap form inputs with <label> elements or use aria-label attributes to provide accessible labels for all form fields."
+    }
+    if (desc.includes("aria")) {
+      return "Add appropriate ARIA attributes (aria-label, aria-describedby, role) to improve accessibility for screen reader users."
+    }
+    if (desc.includes("heading structure") || desc.includes("h1")) {
+      return "Ensure proper heading hierarchy (h1 → h2 → h3) without skipping levels. Each page should have exactly one h1 tag."
+    }
+    if (desc.includes("button") && desc.includes("accessible")) {
+      return "Add aria-label or descriptive text content to buttons so screen reader users understand their purpose."
+    }
+
+    // SEO solutions
+    if (desc.includes("meta description")) {
+      return "Add a meta description tag in the <head> section with a compelling 150-160 character summary of the page content."
+    }
+    if (desc.includes("title tag") || desc.includes("page title")) {
+      return "Add a unique, descriptive <title> tag (50-60 characters) that accurately describes the page content and includes relevant keywords."
+    }
+    if (desc.includes("open graph") || desc.includes("og:")) {
+      return "Add Open Graph meta tags (og:title, og:description, og:image) to improve how your page appears when shared on social media."
+    }
+    if (desc.includes("canonical")) {
+      return "Add a canonical link tag to specify the preferred URL version and avoid duplicate content issues."
+    }
+    if (desc.includes("structured data") || desc.includes("schema")) {
+      return "Implement JSON-LD structured data (Schema.org) to help search engines understand your content better."
+    }
+
+    // UX solutions
+    if (desc.includes("empty link") || (desc.includes("link") && desc.includes("text"))) {
+      return "Ensure all links have descriptive text content. Avoid generic text like 'click here' - use meaningful descriptions instead."
+    }
+    if (desc.includes("small text") || desc.includes("font size")) {
+      return "Increase font size to at least 16px for body text to improve readability, especially on mobile devices."
+    }
+    if (desc.includes("contrast")) {
+      return "Improve color contrast between text and background to meet WCAG AA standards (4.5:1 for normal text, 3:1 for large text)."
+    }
+
+    // Performance solutions
+    if (desc.includes("external script") || desc.includes("javascript")) {
+      return "Add async or defer attributes to external script tags to prevent blocking page rendering. Consider bundling scripts to reduce requests."
+    }
+    if (desc.includes("inline style")) {
+      return "Move inline styles to external CSS files or use CSS-in-JS solutions to improve maintainability and caching."
+    }
+
+    // Functionality solutions
+    if (desc.includes("form") && desc.includes("action")) {
+      return "Add an action attribute to forms specifying where form data should be submitted, or implement JavaScript form handling."
+    }
+    if (desc.includes("deprecated")) {
+      return "Replace deprecated HTML tags with modern semantic alternatives. Check MDN documentation for recommended replacements."
+    }
+    if (desc.includes("button type")) {
+      return 'Add explicit type attributes to buttons (type="button", type="submit", or type="reset") to prevent unexpected form submissions.'
+    }
+
+    // Default solution
+    return "Review the issue description and implement the recommended fix. Consult WCAG guidelines, MDN documentation, or web.dev for detailed implementation guidance."
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -130,7 +236,7 @@ export function VisualReportDashboard({
         <div className="max-w-7xl mx-auto p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-bold mb-2">Visual Test Report</h1>
+              <h1 className="text-3xl font-bold mb-2">Test Report</h1>
               <p className="text-muted-foreground">{report.baseUrl}</p>
             </div>
             <Link href="/">
@@ -141,28 +247,39 @@ export function VisualReportDashboard({
             </Link>
           </div>
 
-          {/* Summary Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Play className="size-5 text-primary" />
+                <div className="p-2 rounded-lg bg-destructive/10">
+                  <AlertCircle className="size-5 text-destructive" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{report.actions.length}</p>
-                  <p className="text-sm text-muted-foreground">Actions Performed</p>
+                  <p className="text-2xl font-bold">{criticalCount + highCount}</p>
+                  <p className="text-sm text-muted-foreground">Critical & High</p>
                 </div>
               </div>
             </Card>
 
             <Card className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-destructive/10">
-                  <AlertTriangle className="size-5 text-destructive" />
+                <div className="p-2 rounded-lg bg-yellow-500/10">
+                  <AlertTriangle className="size-5 text-yellow-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{report.issues.length}</p>
-                  <p className="text-sm text-muted-foreground">Issues Found</p>
+                  <p className="text-2xl font-bold">{mediumCount}</p>
+                  <p className="text-sm text-muted-foreground">Medium Priority</p>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-500/10">
+                  <AlertTriangle className="size-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{lowCount}</p>
+                  <p className="text-sm text-muted-foreground">Low Priority</p>
                 </div>
               </div>
             </Card>
@@ -178,106 +295,101 @@ export function VisualReportDashboard({
                 </div>
               </div>
             </Card>
-
-            <Card className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <CheckCircle2 className="size-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{report.actions.filter((a) => a.success).length}</p>
-                  <p className="text-sm text-muted-foreground">Successful Actions</p>
-                </div>
-              </div>
-            </Card>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="max-w-7xl mx-auto p-6">
-        <Tabs defaultValue="timeline" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="timeline">Test Timeline</TabsTrigger>
-            <TabsTrigger value="issues">Issues ({report.issues.length})</TabsTrigger>
-          </TabsList>
+        {report.issues.length === 0 ? (
+          <Card className="p-12 text-center">
+            <CheckCircle2 className="size-16 text-primary mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">No Issues Found!</h3>
+            <p className="text-muted-foreground">
+              The test completed successfully without detecting any issues. Your website appears to be well-optimized.
+            </p>
+          </Card>
+        ) : (
+          <Tabs defaultValue={Object.keys(issuesByCategory)[0]} className="space-y-6">
+            <TabsList>
+              <TabsTrigger value="all">All Issues ({report.issues.length})</TabsTrigger>
+              {Object.keys(issuesByCategory).map((category) => (
+                <TabsTrigger key={category} value={category}>
+                  {category} ({issuesByCategory[category].length})
+                </TabsTrigger>
+              ))}
+            </TabsList>
 
-          <TabsContent value="timeline" className="space-y-4">
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Action Timeline</h2>
-              <div className="space-y-6">
-                {report.actions.map((action, index) => (
-                  <div key={action.id} className="flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        {getActionIcon(action.type)}
-                      </div>
-                      {index < report.actions.length - 1 && <div className="w-0.5 flex-1 bg-border mt-2" />}
-                    </div>
-                    <div className="flex-1 pb-6">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="font-semibold">{action.description}</h3>
-                        <Badge variant="outline" className="text-xs">
-                          {action.type}
-                        </Badge>
-                      </div>
-                      {action.element && (
-                        <p className="text-sm text-muted-foreground mb-2">
-                          Element: <span className="font-mono bg-muted px-1 rounded">{action.element}</span>
-                          {action.value && (
-                            <>
-                              {" "}
-                              = <span className="font-mono bg-muted px-1 rounded">"{action.value}"</span>
-                            </>
-                          )}
-                        </p>
-                      )}
-                      {action.screenshot && (
-                        <div className="relative w-full h-64 rounded-lg overflow-hidden border border-border mt-3">
-                          <Image
-                            src={action.screenshot || "/placeholder.svg"}
-                            alt={action.description}
-                            fill
-                            className="object-cover"
-                          />
+            <TabsContent value="all" className="space-y-4">
+              {Object.entries(issuesByCategory).map(([category, issues]) => (
+                <Card key={category} className="p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 rounded-lg bg-primary/10">{getCategoryIcon(category)}</div>
+                    <h2 className="text-xl font-semibold">{category}</h2>
+                    <Badge variant="outline">{issues.length} issues</Badge>
+                  </div>
+                  <div className="space-y-4">
+                    {issues.map((issue) => (
+                      <div key={issue.id} className="border-l-2 border-border pl-4 py-2">
+                        <div className="flex items-start gap-3 mb-2">
+                          <Badge variant={getSeverityColor(issue.severity)} className="mt-0.5">
+                            {issue.severity}
+                          </Badge>
+                          <div className="flex-1">
+                            <p className="font-medium mb-1">{issue.description}</p>
+                            <div className="flex items-start gap-2 mt-3 p-3 bg-muted rounded-lg">
+                              <Lightbulb className="size-4 text-primary flex-shrink-0 mt-0.5" />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium mb-1">Recommended Solution:</p>
+                                <p className="text-sm text-muted-foreground leading-relaxed">{getSolution(issue)}</p>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      )}
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              ))}
+            </TabsContent>
+
+            {Object.entries(issuesByCategory).map(([category, issues]) => (
+              <TabsContent key={category} value={category} className="space-y-4">
+                <Card className="p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 rounded-lg bg-primary/10">{getCategoryIcon(category)}</div>
+                    <div>
+                      <h2 className="text-xl font-semibold">{category} Issues</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Found {issues.length} {issues.length === 1 ? "issue" : "issues"} in this category
+                      </p>
                     </div>
                   </div>
-                ))}
-              </div>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="issues" className="space-y-4">
-            {report.issues.length === 0 ? (
-              <Card className="p-12 text-center">
-                <CheckCircle2 className="size-16 text-primary mx-auto mb-4" />
-                <h3 className="text-xl font-semibold mb-2">No Issues Found!</h3>
-                <p className="text-muted-foreground">
-                  The visual test completed successfully without detecting any issues.
-                </p>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {report.issues.map((issue) => (
-                  <Card key={issue.id} className="p-6">
-                    <div className="flex items-start gap-4">
-                      <AlertTriangle className="size-5 text-destructive flex-shrink-0 mt-1" />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge variant={getSeverityColor(issue.severity)}>{issue.severity}</Badge>
-                          <Badge variant="outline">{issue.category}</Badge>
+                  <div className="space-y-4">
+                    {issues.map((issue) => (
+                      <div key={issue.id} className="border-l-2 border-border pl-4 py-2">
+                        <div className="flex items-start gap-3 mb-2">
+                          <Badge variant={getSeverityColor(issue.severity)} className="mt-0.5">
+                            {issue.severity}
+                          </Badge>
+                          <div className="flex-1">
+                            <p className="font-medium mb-1">{issue.description}</p>
+                            <div className="flex items-start gap-2 mt-3 p-3 bg-muted rounded-lg">
+                              <Lightbulb className="size-4 text-primary flex-shrink-0 mt-0.5" />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium mb-1">Recommended Solution:</p>
+                                <p className="text-sm text-muted-foreground leading-relaxed">{getSolution(issue)}</p>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-sm leading-relaxed">{issue.description}</p>
                       </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+                    ))}
+                  </div>
+                </Card>
+              </TabsContent>
+            ))}
+          </Tabs>
+        )}
       </div>
     </div>
   )

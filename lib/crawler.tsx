@@ -451,10 +451,65 @@ function analyzeVisualIssues(html: string): string[] {
     issues.push(`${imgWithoutAlt.length} images missing alt text (accessibility issue)`)
   }
 
+  // Check for missing form labels
+  const inputs = html.match(/<input[^>]*>/gi) || []
+  const labels = html.match(/<label[^>]*>/gi) || []
+  if (inputs.length > labels.length && inputs.length > 0) {
+    issues.push(`${inputs.length - labels.length} form inputs may be missing labels (accessibility issue)`)
+  }
+
+  // Check for missing ARIA labels on buttons
+  const buttonsWithoutLabel = html.match(/<button(?![^>]*aria-label=)(?![^>]*>[\s\S]*?[a-zA-Z])[^>]*>/gi)
+  if (buttonsWithoutLabel && buttonsWithoutLabel.length > 0) {
+    issues.push(`${buttonsWithoutLabel.length} buttons may be missing accessible labels`)
+  }
+
+  // Check for proper heading hierarchy
+  const h1Count = (html.match(/<h1[^>]*>/gi) || []).length
+  if (h1Count === 0) {
+    issues.push("Missing H1 heading (accessibility and SEO issue)")
+  } else if (h1Count > 1) {
+    issues.push(`Multiple H1 headings found (${h1Count}) - should only have one per page`)
+  }
+
+  // Check for missing language attribute
+  if (!html.match(/<html[^>]*lang=/i)) {
+    issues.push("Missing language attribute on HTML tag (accessibility issue)")
+  }
+
+  // Check for meta description
+  if (!html.match(/<meta[^>]*name=["']description["'][^>]*>/i)) {
+    issues.push("Missing meta description (SEO issue)")
+  }
+
+  // Check for meta description length
+  const metaDescMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']*)["']/i)
+  if (metaDescMatch && metaDescMatch[1]) {
+    const descLength = metaDescMatch[1].length
+    if (descLength < 120) {
+      issues.push(`Meta description too short (${descLength} chars, recommended 120-160)`)
+    } else if (descLength > 160) {
+      issues.push(`Meta description too long (${descLength} chars, recommended 120-160)`)
+    }
+  }
+
+  // Check for Open Graph tags
+  const hasOGTitle = html.includes('property="og:title"')
+  const hasOGDescription = html.includes('property="og:description"')
+  const hasOGImage = html.includes('property="og:image"')
+  if (!hasOGTitle || !hasOGDescription || !hasOGImage) {
+    issues.push("Missing Open Graph tags for social media sharing (SEO issue)")
+  }
+
+  // Check for canonical URL
+  if (!html.match(/<link[^>]*rel=["']canonical["'][^>]*>/i)) {
+    issues.push("Missing canonical URL (SEO issue)")
+  }
+
   // Check for inline styles (maintainability issue)
   const inlineStyles = html.match(/style=["'][^"']+["']/gi)
   if (inlineStyles && inlineStyles.length > 10) {
-    issues.push(`Excessive inline styles detected (${inlineStyles.length} instances)`)
+    issues.push(`Excessive inline styles detected (${inlineStyles.length} instances - UX/maintainability issue)`)
   }
 
   // Check for missing meta viewport (mobile responsiveness)
@@ -462,16 +517,75 @@ function analyzeVisualIssues(html: string): string[] {
     issues.push("Missing viewport meta tag (mobile responsiveness issue)")
   }
 
-  // Check for broken image references
-  const brokenImgSrc = html.match(/src=["'](data:image\/svg\+xml|#|javascript:)/gi)
-  if (brokenImgSrc && brokenImgSrc.length > 0) {
-    issues.push("Potentially broken image sources detected")
+  // Check for small text
+  const smallTextMatches = html.match(/font-size:\s*([0-9]+)px/gi) || []
+  const smallTextCount = smallTextMatches.filter((match) => {
+    const size = Number.parseInt(match.match(/([0-9]+)/)?.[1] || "16")
+    return size < 12
+  }).length
+  if (smallTextCount > 0) {
+    issues.push(`${smallTextCount} instances of very small text (< 12px) detected (UX issue)`)
   }
 
   // Check for empty links
   const emptyLinks = html.match(/<a[^>]*>\s*<\/a>/gi)
   if (emptyLinks && emptyLinks.length > 0) {
-    issues.push(`${emptyLinks.length} empty links found`)
+    issues.push(`${emptyLinks.length} empty links found (UX issue)`)
+  }
+
+  // Check for links without href
+  const linksWithoutHref = html.match(/<a(?![^>]*href=)[^>]*>/gi)
+  if (linksWithoutHref && linksWithoutHref.length > 0) {
+    issues.push(`${linksWithoutHref.length} links missing href attribute (functionality issue)`)
+  }
+
+  // Check for broken image references
+  const brokenImgSrc = html.match(/src=["'](data:image\/svg\+xml|#|javascript:)/gi)
+  if (brokenImgSrc && brokenImgSrc.length > 0) {
+    issues.push("Potentially broken image sources detected (functionality issue)")
+  }
+
+  // Check for forms without action
+  const formsWithoutAction = html.match(/<form(?![^>]*action=)[^>]*>/gi)
+  if (formsWithoutAction && formsWithoutAction.length > 0) {
+    issues.push(`${formsWithoutAction.length} forms missing action attribute (functionality issue)`)
+  }
+
+  // Check for buttons without type
+  const buttonsWithoutType = html.match(/<button(?![^>]*type=)[^>]*>/gi)
+  if (buttonsWithoutType && buttonsWithoutType.length > 0) {
+    issues.push(`${buttonsWithoutType.length} buttons missing type attribute (functionality issue)`)
+  }
+
+  // Check for inputs without type
+  const inputsWithoutType = html.match(/<input(?![^>]*type=)[^>]*>/gi)
+  if (inputsWithoutType && inputsWithoutType.length > 0) {
+    issues.push(`${inputsWithoutType.length} inputs missing type attribute (functionality issue)`)
+  }
+
+  // Check for deprecated HTML tags
+  const deprecatedTags = html.match(/<(font|center|marquee|blink|strike|big|tt)[^>]*>/gi)
+  if (deprecatedTags && deprecatedTags.length > 0) {
+    issues.push(`${deprecatedTags.length} deprecated HTML tags found (functionality/compatibility issue)`)
+  }
+
+  // Check for large inline scripts
+  const scriptMatches = html.match(/<script[^>]*>[\s\S]*?<\/script>/gi) || []
+  const largeInlineScripts = scriptMatches.filter((script) => script.length > 10000).length
+  if (largeInlineScripts > 0) {
+    issues.push(`${largeInlineScripts} large inline scripts detected (performance issue)`)
+  }
+
+  // Check for excessive external scripts
+  const externalScripts = html.match(/<script[^>]*src=/gi) || []
+  if (externalScripts.length > 15) {
+    issues.push(`${externalScripts.length} external scripts loaded (performance issue - consider bundling)`)
+  }
+
+  // Check for missing async/defer on scripts
+  const scriptsWithoutAsync = html.match(/<script[^>]*src=(?![^>]*async)(?![^>]*defer)[^>]*>/gi)
+  if (scriptsWithoutAsync && scriptsWithoutAsync.length > 3) {
+    issues.push(`${scriptsWithoutAsync.length} scripts without async/defer (performance issue)`)
   }
 
   return issues
