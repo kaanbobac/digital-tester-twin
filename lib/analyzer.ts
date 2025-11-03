@@ -35,6 +35,23 @@ export interface AnalysisReport {
   issues: Issue[]
   summary: string
   testDuration: number
+  crawlPath?: Array<{
+    url: string
+    discoveredFrom: string
+    linkText: string
+    discoveryMethod: "html_link" | "meta_tag" | "redirect" | "initial"
+    depth: number
+    timestamp: number
+  }>
+  pages?: Array<{
+    url: string
+    title: string
+    statusCode: number
+    discoveredFrom?: string
+    linkText?: string
+    discoveryMethod?: string
+    depth: number
+  }>
 }
 
 export function analyzeTestResults(testData: {
@@ -48,9 +65,21 @@ export function analyzeTestResults(testData: {
     visualIssues: string[]
     consoleErrors: string[]
     links: string[]
+    discoveredFrom?: string
+    linkText?: string
+    discoveryMethod?: string
+    depth: number
   }>
   startTime: number
   endTime?: number
+  crawlPath?: Array<{
+    url: string
+    discoveredFrom: string
+    linkText: string
+    discoveryMethod: "html_link" | "meta_tag" | "redirect" | "initial"
+    depth: number
+    timestamp: number
+  }>
 }): AnalysisReport {
   const issues: Issue[] = []
   let issueCounter = 0
@@ -250,6 +279,16 @@ export function analyzeTestResults(testData: {
     issues,
     summary,
     testDuration: testData.endTime ? testData.endTime - testData.startTime : 0,
+    crawlPath: testData.crawlPath,
+    pages: testData.pages.map((p) => ({
+      url: p.url,
+      title: p.title,
+      statusCode: p.statusCode,
+      discoveredFrom: p.discoveredFrom,
+      linkText: p.linkText,
+      discoveryMethod: p.discoveryMethod,
+      depth: p.depth,
+    })),
   }
 }
 

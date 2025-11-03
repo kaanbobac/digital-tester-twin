@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import type { AnalysisReport, IssueSeverity, IssueCategory } from "@/lib/analyzer"
+import { CrawlPathTree } from "./crawl-path-tree"
 
 interface ReportDashboardProps {
   report: AnalysisReport
@@ -265,6 +266,10 @@ export function ReportDashboard({ report }: ReportDashboardProps) {
               <h2 className="text-lg font-semibold mb-2">Executive Summary</h2>
               <p className="text-sm text-muted-foreground leading-relaxed">{report.summary}</p>
             </Card>
+
+            {report.crawlPath && report.pages && report.crawlPath.length > 0 && (
+              <CrawlPathTree pages={report.pages} crawlPath={report.crawlPath} />
+            )}
 
             {/* Tabbed Issues View */}
             <Card className="p-5">

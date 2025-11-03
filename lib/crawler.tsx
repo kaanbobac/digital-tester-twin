@@ -8,6 +8,21 @@ interface PageData {
   screenshot?: string
   visualIssues: string[]
   consoleErrors: string[]
+  discoveredFrom?: string
+  linkText?: string
+  discoveryMethod?: string
+  depth: number
+}
+
+interface VisualAction {
+  id: string
+  type: "navigate" | "click" | "scroll" | "analyze" | "check"
+  description: string
+  url: string
+  timestamp: number
+  status: "success" | "error" | "warning"
+  details?: string
+  targetUrl?: string
 }
 
 interface TestData {
@@ -21,6 +36,15 @@ interface TestData {
   pages: PageData[]
   startTime: number
   endTime?: number
+  crawlPath: {
+    url: string
+    discoveredFrom: string
+    linkText: string
+    discoveryMethod: "html_link" | "meta_tag" | "redirect" | "initial"
+    depth: number
+    timestamp: number
+  }[]
+  actions?: VisualAction[]
 }
 
 // In-memory storage (in production, use a database)
@@ -31,8 +55,34 @@ import { analyzeTestResults } from "./analyzer"
 export async function crawlWebsite(url: string, testId: string) {
   const baseUrl = new URL(url).origin
   const visitedUrls = new Set<string>()
-  const toVisit: string[] = [url]
+  const toVisit: {
+    url: string
+    discoveredFrom: string
+    linkText: string
+    discoveryMethod: "html_link" | "meta_tag" | "redirect" | "initial"
+    depth: number
+    timestamp: number
+  }[] = [
+    {
+      url,
+      discoveredFrom: "initial",
+      linkText: "Starting URL",
+      discoveryMethod: "initial",
+      depth: 0,
+      timestamp: Date.now(),
+    },
+  ]
   const pages: PageData[] = []
+  const crawlPath: {
+    url: string
+    discoveredFrom: string
+    linkText: string
+    discoveryMethod: "html_link" | "meta_tag" | "redirect" | "initial"
+    depth: number
+    timestamp: number
+  }[] = []
+
+  const actions: VisualAction[] = []
 
   // Initialize test data
   testStore.set(testId, {
@@ -43,27 +93,64 @@ export async function crawlWebsite(url: string, testId: string) {
     pagesFound: 0,
     pages: [],
     startTime: Date.now(),
+    crawlPath: [],
+    actions: [], // Initialize actions array
   })
 
+  const addAction = (action: Omit<VisualAction, "id" | "timestamp">) => {
+    const newAction: VisualAction = {
+      ...action,
+      id: `action_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      timestamp: Date.now(),
+    }
+    actions.push(newAction)
+    const testData = testStore.get(testId)!
+    testData.actions = actions
+    testStore.set(testId, testData)
+    return newAction
+  }
+
   try {
+    addAction({
+      type: "navigate",
+      description: `Starting test on ${url}`,
+      url,
+      status: "success",
+      details: "Initializing comprehensive website test",
+    })
+
     // Crawl up to 20 pages
     const maxPages = 20
 
     while (toVisit.length > 0 && visitedUrls.size < maxPages) {
-      const currentUrl = toVisit.shift()!
+      const currentDiscovery = toVisit.shift()!
+      const currentUrl = currentDiscovery.url
 
       if (visitedUrls.has(currentUrl)) continue
       visitedUrls.add(currentUrl)
+      crawlPath.push(currentDiscovery)
 
       // Update status
       const testData = testStore.get(testId)!
       testData.currentPage = currentUrl
       testData.pagesFound = visitedUrls.size
       testData.progress = (visitedUrls.size / maxPages) * 50 // First 50% is crawling
+      testData.crawlPath = crawlPath
       testStore.set(testId, testData)
 
+      addAction({
+        type: "navigate",
+        description: `Navigating to page ${visitedUrls.size}/${maxPages}`,
+        url: currentUrl,
+        status: "success",
+        details: currentDiscovery.linkText,
+        targetUrl: currentUrl,
+      })
+
       try {
-        console.log(`[v0] Crawling: ${currentUrl}`)
+        console.log(
+          `[v0] Crawling: ${currentUrl} (discovered from: ${currentDiscovery.discoveredFrom}, method: ${currentDiscovery.discoveryMethod}, depth: ${currentDiscovery.depth})`,
+        )
 
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
@@ -84,6 +171,13 @@ export async function crawlWebsite(url: string, testId: string) {
         const contentType = response.headers.get("content-type") || ""
         if (!contentType.includes("text/html")) {
           console.log(`[v0] Skipping non-HTML content: ${contentType}`)
+          addAction({
+            type: "check",
+            description: "Skipped non-HTML content",
+            url: currentUrl,
+            status: "warning",
+            details: `Content type: ${contentType}`,
+          })
           pages.push({
             url: currentUrl,
             title: "Non-HTML Content",
@@ -93,6 +187,10 @@ export async function crawlWebsite(url: string, testId: string) {
             timestamp: Date.now(),
             visualIssues: [],
             consoleErrors: [],
+            discoveredFrom: currentDiscovery.discoveredFrom,
+            linkText: currentDiscovery.linkText,
+            discoveryMethod: currentDiscovery.discoveryMethod,
+            depth: currentDiscovery.depth,
           })
           continue
         }
@@ -100,22 +198,51 @@ export async function crawlWebsite(url: string, testId: string) {
         const html = await response.text()
         console.log(`[v0] Fetched ${html.length} bytes from ${currentUrl}`)
 
+        addAction({
+          type: "scroll",
+          description: "Scrolling through page content",
+          url: currentUrl,
+          status: "success",
+          details: `Analyzing ${Math.round(html.length / 1024)}KB of content`,
+        })
+
         // Extract title
         const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
         const title = titleMatch ? titleMatch[1] : "Untitled"
 
-        // Extract links
-        const linkMatches = html.matchAll(/href=["']([^"']+)["']/gi)
+        const linkRegex = /<a[^>]*href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi
         const links: string[] = []
+        let linkMatch
+        let discoveredLinksCount = 0
 
-        for (const match of linkMatches) {
+        while ((linkMatch = linkRegex.exec(html)) !== null) {
           try {
-            const link = new URL(match[1], currentUrl)
+            const linkUrl = linkMatch[1]
+            const linkText = linkMatch[2].trim() || "(no text)"
+            const link = new URL(linkUrl, currentUrl)
+
             // Only follow links on the same domain
             if (link.origin === baseUrl && !visitedUrls.has(link.href)) {
               links.push(link.href)
-              if (!toVisit.includes(link.href)) {
-                toVisit.push(link.href)
+
+              const shouldCrawl =
+                !link.href.match(/\.(css|js|jpg|jpeg|png|gif|svg|woff|woff2|ttf|ico|xml|json)$/i) &&
+                !link.href.includes("/wp-json/oembed/") &&
+                !link.href.includes("/feed/") &&
+                !link.href.includes("/xmlrpc.php") &&
+                !link.href.includes("?format=xml")
+
+              if (shouldCrawl && !toVisit.some((d) => d.url === link.href)) {
+                toVisit.push({
+                  url: link.href,
+                  discoveredFrom: currentUrl,
+                  linkText: linkText.substring(0, 50), // Limit length
+                  discoveryMethod: "html_link",
+                  depth: currentDiscovery.depth + 1,
+                  timestamp: Date.now(),
+                })
+                discoveredLinksCount++
+                console.log(`[v0] Discovered link: "${linkText}" -> ${link.href}`)
               }
             }
           } catch {
@@ -123,12 +250,45 @@ export async function crawlWebsite(url: string, testId: string) {
           }
         }
 
-        // Check for common errors
+        if (discoveredLinksCount > 0) {
+          addAction({
+            type: "click",
+            description: `Found ${discoveredLinksCount} clickable links`,
+            url: currentUrl,
+            status: "success",
+            details: `Discovered ${discoveredLinksCount} new pages to test`,
+          })
+        }
+
+        const metaLinkRegex = /<link[^>]*href=["']([^"']+)["'][^>]*>/gi
+        let metaMatch
+        while ((metaMatch = metaLinkRegex.exec(html)) !== null) {
+          try {
+            const link = new URL(metaMatch[1], currentUrl)
+            if (link.origin === baseUrl && !visitedUrls.has(link.href)) {
+              // Only add HTML pages from meta tags, skip assets
+              if (link.href.match(/\.(html|htm|php)$/i) || !link.href.match(/\./)) {
+                if (!toVisit.some((d) => d.url === link.href)) {
+                  toVisit.push({
+                    url: link.href,
+                    discoveredFrom: currentUrl,
+                    linkText: "(meta tag)",
+                    discoveryMethod: "meta_tag",
+                    depth: currentDiscovery.depth + 1,
+                    timestamp: Date.now(),
+                  })
+                }
+              }
+            }
+          } catch {
+            // Invalid URL, skip
+          }
+        }
+
         const errors: string[] = []
         if (response.status >= 400) {
           errors.push(`HTTP ${response.status} error`)
         }
-        // Check title and main content, not just any occurrence of "404"
         if (response.status === 200) {
           const titleLower = title.toLowerCase()
           const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i)
@@ -149,6 +309,37 @@ export async function crawlWebsite(url: string, testId: string) {
         const visualIssues = analyzeVisualIssues(html)
         const consoleErrors = detectPotentialConsoleErrors(html)
 
+        if (visualIssues.length > 0) {
+          addAction({
+            type: "analyze",
+            description: `Checking accessibility`,
+            url: currentUrl,
+            status: visualIssues.length > 0 ? "warning" : "success",
+            details: `Found ${visualIssues.length} accessibility issues`,
+          })
+        }
+
+        const hasSEOIssues = !html.includes('name="description"') || !titleMatch
+        addAction({
+          type: "check",
+          description: "Analyzing SEO elements",
+          url: currentUrl,
+          status: hasSEOIssues ? "warning" : "success",
+          details: hasSEOIssues ? "Missing meta description or title" : "SEO elements present",
+        })
+
+        const buttonCount = (html.match(/<button/gi) || []).length
+        const formCount = (html.match(/<form/gi) || []).length
+        if (buttonCount > 0 || formCount > 0) {
+          addAction({
+            type: "click",
+            description: `Testing interactive elements`,
+            url: currentUrl,
+            status: "success",
+            details: `Found ${buttonCount} buttons and ${formCount} forms`,
+          })
+        }
+
         pages.push({
           url: currentUrl,
           title,
@@ -158,6 +349,10 @@ export async function crawlWebsite(url: string, testId: string) {
           timestamp: Date.now(),
           visualIssues,
           consoleErrors,
+          discoveredFrom: currentDiscovery.discoveredFrom,
+          linkText: currentDiscovery.linkText,
+          discoveryMethod: currentDiscovery.discoveryMethod,
+          depth: currentDiscovery.depth,
         })
       } catch (error) {
         console.error(`[v0] Error crawling ${currentUrl}:`, error)
@@ -173,6 +368,14 @@ export async function crawlWebsite(url: string, testId: string) {
           }
         }
 
+        addAction({
+          type: "check",
+          description: `Failed to test page`,
+          url: currentUrl,
+          status: "error",
+          details: errorMessage,
+        })
+
         pages.push({
           url: currentUrl,
           title: "Error",
@@ -182,6 +385,10 @@ export async function crawlWebsite(url: string, testId: string) {
           timestamp: Date.now(),
           visualIssues: [],
           consoleErrors: [],
+          discoveredFrom: currentDiscovery.discoveredFrom,
+          linkText: currentDiscovery.linkText,
+          discoveryMethod: currentDiscovery.discoveryMethod,
+          depth: currentDiscovery.depth,
         })
       }
 
@@ -203,6 +410,14 @@ export async function crawlWebsite(url: string, testId: string) {
     testData.pages = pages
     testStore.set(testId, testData)
 
+    addAction({
+      type: "analyze",
+      description: "Generating comprehensive report",
+      url: baseUrl,
+      status: "success",
+      details: `Analyzed ${pages.length} pages with ${actions.length} total checks`,
+    })
+
     await captureScreenshots(pages, testId)
 
     testData.progress = 90
@@ -222,6 +437,7 @@ export async function crawlWebsite(url: string, testId: string) {
     testData.status = "error"
     testData.message = error instanceof Error ? error.message : "An error occurred during testing"
     testData.pages = pages // Include any pages we did manage to crawl
+    testData.actions = actions // Include actions even on error
     testStore.set(testId, testData)
   }
 }

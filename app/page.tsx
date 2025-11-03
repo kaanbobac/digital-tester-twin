@@ -1,5 +1,5 @@
 import { TestUrlForm } from "@/components/test-url-form"
-import { Search, Bug, Eye, Zap } from "lucide-react"
+import { Search, Bug, Play, MousePointer } from "lucide-react"
 
 export default function HomePage() {
   return (
@@ -34,8 +34,8 @@ export default function HomePage() {
             Test your website like a real user
           </h1>
           <p className="text-xl text-muted-foreground text-balance max-w-2xl mx-auto leading-relaxed">
-            Automatically discover bugs, UX issues, and broken flows across your entire website. Get comprehensive
-            reports in minutes, not hours.
+            Watch as our AI interacts with your website - clicking buttons, filling forms, and navigating pages. Get
+            comprehensive visual reports with screenshots of every action.
           </p>
 
           {/* URL Input Form */}
@@ -50,11 +50,21 @@ export default function HomePage() {
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="p-6 rounded-lg border border-border bg-card hover:border-primary/50 transition-colors">
             <div className="size-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-              <Search className="size-6 text-primary" />
+              <Play className="size-6 text-primary" />
             </div>
-            <h3 className="text-lg font-semibold mb-2">Smart Crawling</h3>
+            <h3 className="text-lg font-semibold mb-2">Visual Testing</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Automatically discovers all pages and user flows on your website
+              Watch the tool interact with your site in real-time with step-by-step screenshots
+            </p>
+          </div>
+
+          <div className="p-6 rounded-lg border border-border bg-card hover:border-primary/50 transition-colors">
+            <div className="size-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+              <MousePointer className="size-6 text-primary" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Interactive Actions</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Automatically clicks buttons, fills forms, and tests user flows
             </p>
           </div>
 
@@ -70,21 +80,11 @@ export default function HomePage() {
 
           <div className="p-6 rounded-lg border border-border bg-card hover:border-primary/50 transition-colors">
             <div className="size-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-              <Eye className="size-6 text-primary" />
+              <Search className="size-6 text-primary" />
             </div>
-            <h3 className="text-lg font-semibold mb-2">Visual Analysis</h3>
+            <h3 className="text-lg font-semibold mb-2">Deep Crawl Mode</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Captures screenshots and analyzes UI/UX problems automatically
-            </p>
-          </div>
-
-          <div className="p-6 rounded-lg border border-border bg-card hover:border-primary/50 transition-colors">
-            <div className="size-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-              <Zap className="size-6 text-primary" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">Instant Reports</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Get detailed reports with actionable insights in minutes
+              Alternative mode that crawls up to 20 pages and analyzes site structure
             </p>
           </div>
         </div>
@@ -102,7 +102,7 @@ export default function HomePage() {
               <div>
                 <h3 className="text-xl font-semibold mb-2">Enter Your URL</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  Simply paste your website URL and our crawler will start exploring as a guest user
+                  Paste your website URL and choose between Visual Testing or Deep Crawl mode
                 </p>
               </div>
             </div>
@@ -112,9 +112,10 @@ export default function HomePage() {
                 2
               </div>
               <div>
-                <h3 className="text-xl font-semibold mb-2">Automated Testing</h3>
+                <h3 className="text-xl font-semibold mb-2">Watch the Test Run</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  Our AI navigates through your site, testing forms, links, and user flows while capturing screenshots
+                  See every action in real-time as the tool navigates, clicks buttons, fills forms, and captures
+                  screenshots of each step
                 </p>
               </div>
             </div>
