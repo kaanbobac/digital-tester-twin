@@ -69,13 +69,26 @@ export default function VisualTestPage() {
           const status = await statusResponse.json()
 
           console.log("[v0] Test status update:", status.status, status.progress)
+
+          const transformedActions = (status.actions || []).map((action: any) => ({
+            id: action.id,
+            type: action.type,
+            element: action.details || action.targetUrl,
+            value: undefined,
+            timestamp: action.timestamp,
+            screenshot: undefined,
+            success: action.status === "success",
+            description: action.description,
+            url: action.url || action.targetUrl,
+          }))
+
           setTestStatus({
             ...status,
-            actions: status.actions || [],
+            actions: transformedActions,
           })
 
-          if (status.actions && status.actions.length > 0) {
-            const latestAction = status.actions[status.actions.length - 1]
+          if (transformedActions.length > 0) {
+            const latestAction = transformedActions[transformedActions.length - 1]
             setActiveAction(latestAction)
             if (latestAction.url) {
               setCurrentUrl(latestAction.url)
@@ -85,9 +98,39 @@ export default function VisualTestPage() {
           if (status.status === "complete") {
             clearInterval(pollInterval)
             console.log("[v0] Test complete, redirecting to report")
-            if (status.report) {
-              sessionStorage.setItem(`visual_report_${testId}`, JSON.stringify(status.report))
+
+            const reportData = {
+              testId,
+              baseUrl: url,
+              status: status.status,
+              actions: transformedActions,
+              issues:
+                status.pages?.flatMap((page: any) =>
+                  [...(page.errors || []), ...(page.visualIssues || [])].map((issue: string, idx: number) => ({
+                    id: `issue_${page.url}_${idx}`,
+                    severity: issue.toLowerCase().includes("critical")
+                      ? "critical"
+                      : issue.toLowerCase().includes("error")
+                        ? "high"
+                        : issue.toLowerCase().includes("warning")
+                          ? "medium"
+                          : "low",
+                    category: issue.includes("accessibility")
+                      ? "Accessibility"
+                      : issue.includes("SEO") || issue.includes("meta")
+                        ? "SEO"
+                        : issue.includes("HTTP")
+                          ? "Functionality"
+                          : "General",
+                    description: issue,
+                    screenshot: page.screenshot,
+                  })),
+                ) || [],
+              startTime: status.startTime,
+              endTime: status.endTime || Date.now(),
             }
+
+            sessionStorage.setItem(`visual_report_${testId}`, JSON.stringify(reportData))
             setTimeout(() => {
               window.location.href = `/visual-report/${testId}`
             }, 2000)
