@@ -106,25 +106,72 @@ export default function VisualTestPage() {
               actions: transformedActions,
               issues:
                 status.pages?.flatMap((page: any) =>
-                  [...(page.errors || []), ...(page.visualIssues || [])].map((issue: string, idx: number) => ({
-                    id: `issue_${page.url}_${idx}`,
-                    severity: issue.toLowerCase().includes("critical")
-                      ? "critical"
-                      : issue.toLowerCase().includes("error")
-                        ? "high"
-                        : issue.toLowerCase().includes("warning")
-                          ? "medium"
-                          : "low",
-                    category: issue.includes("accessibility")
-                      ? "Accessibility"
-                      : issue.includes("SEO") || issue.includes("meta")
-                        ? "SEO"
-                        : issue.includes("HTTP")
-                          ? "Functionality"
-                          : "General",
-                    description: issue,
-                    screenshot: page.screenshot,
-                  })),
+                  [...(page.errors || []), ...(page.visualIssues || [])].map((issue: string, idx: number) => {
+                    const issueLower = issue.toLowerCase()
+
+                    // Determine category based on issue text
+                    let category = "General"
+                    if (issueLower.includes("accessibility")) {
+                      category = "Accessibility"
+                    } else if (
+                      issueLower.includes("seo") ||
+                      issueLower.includes("meta") ||
+                      issueLower.includes("open graph") ||
+                      issueLower.includes("canonical")
+                    ) {
+                      category = "SEO"
+                    } else if (
+                      issueLower.includes("ux") ||
+                      issueLower.includes("ui") ||
+                      issueLower.includes("user experience") ||
+                      issueLower.includes("usability")
+                    ) {
+                      category = "UI/UX"
+                    } else if (
+                      issueLower.includes("performance") ||
+                      issueLower.includes("render-blocking") ||
+                      issueLower.includes("layout shift")
+                    ) {
+                      category = "Performance"
+                    } else if (
+                      issueLower.includes("security") ||
+                      issueLower.includes("xss") ||
+                      issueLower.includes("mixed content") ||
+                      issueLower.includes("https")
+                    ) {
+                      category = "Security"
+                    } else if (
+                      issueLower.includes("functionality") ||
+                      issueLower.includes("http") ||
+                      issueLower.includes("broken") ||
+                      issueLower.includes("deprecated")
+                    ) {
+                      category = "Functionality"
+                    }
+
+                    // Determine severity
+                    let severity = "low"
+                    if (issueLower.includes("critical") || issueLower.includes("security")) {
+                      severity = "critical"
+                    } else if (
+                      issueLower.includes("error") ||
+                      issueLower.includes("broken") ||
+                      issueLower.includes("missing")
+                    ) {
+                      severity = "high"
+                    } else if (issueLower.includes("warning") || issueLower.includes("should")) {
+                      severity = "medium"
+                    }
+
+                    return {
+                      id: `issue_${page.url}_${idx}`,
+                      severity,
+                      category,
+                      description: issue,
+                      screenshot: page.screenshot,
+                      url: page.url,
+                    }
+                  }),
                 ) || [],
               startTime: status.startTime,
               endTime: status.endTime || Date.now(),
